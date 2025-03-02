@@ -186,4 +186,17 @@ class DatabaseHelper {
       whereArgs: [userId],
     );
   }
+
+  Future<List<Map<String, dynamic>>> getAttendanceWithCourse(int userId) async {
+    final db = await database;
+    return await db.rawQuery(
+      '''
+    SELECT a.*, c.course_title, c.category
+    FROM $attendanceTableName a
+    LEFT JOIN $courseTableName c ON a.course_code = c.course_code
+    WHERE a.user_id = ?
+  ''',
+      [userId],
+    );
+  }
 }

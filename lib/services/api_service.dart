@@ -8,7 +8,9 @@ import 'package:studenthouse/services/user_repository.dart';
 class ApiService {
   static const String baseUrl = 'http://10.0.2.2:3001/api';
 
-  static Future<Map<String, dynamic>> fetchAttendance() async {
+  static Future<Map<String, dynamic>> fetchAttendance({
+    bool forceReload = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final bool hasFetchedAttendance =
         prefs.getBool("hasFetchedAttendance") ?? false;
@@ -16,7 +18,7 @@ class ApiService {
 
     final int? userId = await UserRepository.getCurrentUserId();
 
-    if (userId != null && hasFetchedAttendance) {
+    if (userId != null && hasFetchedAttendance && !forceReload) {
       final List<Map<String, dynamic>> localAttendance =
           await AttendanceRepository.getAttendance(userId);
       return {
@@ -25,7 +27,11 @@ class ApiService {
         "lastUpdated": lastUpdated,
       };
     } else {
-      final String? jwtToken = await AuthStorage.getToken();
+      final String? jwtToken = await AuthStorage.getUserToken(
+        await UserRepository.getUserEmail(
+          userId,
+        ),
+      );
       final response = await http.post(
         Uri.parse('$baseUrl/attendance'),
         headers: {
@@ -36,13 +42,9 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
-        String? regNumFromResponse;
-        for (var item in responseData['user']) {
-          if (item.containsKey("Registration Number:")) {
-            regNumFromResponse = item["Registration Number:"];
-            break;
-          }
-        }
+        String? regNumFromResponse = responseData['user'];
+
+        print("DEBUG: Registration number from response: $regNumFromResponse");
         if (regNumFromResponse == null) {
           throw Exception("Registration number not found in response.");
         }
@@ -84,9 +86,9 @@ class ApiService {
         // Rename API email to avoid shadowing parameter.
         final apiEmail = data['email'];
         final user = data['user'];
-        await AuthStorage.saveToken(token);
+        await AuthStorage.saveUserToken(apiEmail, token);
 
-        // Handle user data whether it's an Iterable or a Map.
+        print("DEBUG: User data: $user");
         Map<String, String> combinedUser = {};
         if (user is Iterable) {
           for (var map in user) {
@@ -108,8 +110,10 @@ class ApiService {
         if (existingUser == null) {
           print("DEBUG: User not found in database, creating new user.");
           await UserRepository.setUser(combinedUser, apiEmail, password);
+          await UserRepository.setCurrentUserId(combinedUser['Registration Number']!);
         } else {
           print("DEBUG: User already exists in the database.");
+          await UserRepository.setCurrentUserId(combinedUser['Registration Number']!);
         }
 
         print("DEBUG: Token: $token");
@@ -122,4 +126,15 @@ class ApiService {
       return null;
     }
   }
+
+  Future<void> logout(String email) async {
+    try {
+      await UserRepository.removeCurrentUserId();
+      await AuthStorage.removeUserToken(email);
+      print("DEBUG: User logged out and preferences cleared.");
+    } catch (e) {
+      print("DEBUG: Error during logout: $e");
+    }
+  }
+
 }

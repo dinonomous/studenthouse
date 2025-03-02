@@ -59,7 +59,7 @@ class _LoginPageState extends State<LoginPage> {
     return CustomScaffold(
       child: Column(
         children: [
-          Expanded(flex: 1, child: Container(height: 200)),
+            Expanded(flex: 1, child: Container(height: 200)),
           Expanded(
             flex: 7,
             child: Column(

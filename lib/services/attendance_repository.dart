@@ -2,21 +2,13 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:studenthouse/db/database_helper.dart';
 import 'package:studenthouse/services/user_repository.dart';
+
 class AttendanceRepository {
   static Future<void> updateAttendance(Map<String, dynamic> data) async {
     final db = await DatabaseHelper.instance.database;
 
-    // Extract user data
-    final userInfo = data['user'] ?? [];
-    Map<String, String> userMap = {};
-    for (var item in userInfo) {
-      item.forEach((key, value) {
-        userMap[key.replaceAll(':', '').trim()] = value;
-      });
-    }
-
     // Get user ID
-    final userId = await UserRepository.getUserId(userMap['Registration Number']);
+    final userId = await UserRepository.getUserId(data['user']);
     if (userId == null) return;
 
     // Insert courses and attendance records
@@ -28,19 +20,22 @@ class AttendanceRepository {
     }
   }
 
-  static Future<void> _insertCourse(Database db, Map<String, dynamic> record) async {
-    await db.insert(
-      DatabaseHelper.courseTableName,
-      {
-        'course_code': record['Course Code'],
-        'course_title': record['Course Title'],
-        'category': record['Category'],
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+  static Future<void> _insertCourse(
+    Database db,
+    Map<String, dynamic> record,
+  ) async {
+    await db.insert(DatabaseHelper.courseTableName, {
+      'course_code': record['Course Code'],
+      'course_title': record['Course Title'],
+      'category': record['Category'],
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  static Future<void> _insertUserCourse(Database db, int userId, Map<String, dynamic> record) async {
+  static Future<void> _insertUserCourse(
+    Database db,
+    int userId,
+    Map<String, dynamic> record,
+  ) async {
     await db.insert(
       DatabaseHelper.userCoursesTableName,
       {
@@ -54,7 +49,11 @@ class AttendanceRepository {
     );
   }
 
-  static Future<void> _insertAttendance(Database db, int userId, Map<String, dynamic> record) async {
+  static Future<void> _insertAttendance(
+    Database db,
+    int userId,
+    Map<String, dynamic> record,
+  ) async {
     await db.insert(
       DatabaseHelper.attendanceTableName,
       {
@@ -71,14 +70,13 @@ class AttendanceRepository {
   }
 
   static Future<List<Map<String, dynamic>>> getAttendance(int userId) async {
-    final db = await DatabaseHelper.instance.database;
-    final result = await db.query(
-      DatabaseHelper.attendanceTableName,
-      where: 'user_id = ?',
-      whereArgs: [userId],
-    );
+    final userId = await UserRepository.getCurrentUserId();
+    if (userId == null) {
+      return [];
+    }
+    final attendanceList = await DatabaseHelper.instance.getAttendanceWithCourse(userId);
     print('Fetched attendance records for user $userId:');
-    print(result);
-    return result;
+    print(attendanceList);
+    return attendanceList;
   }
 }
